@@ -1,0 +1,18 @@
+version: '3'
+services:
+    minecraft-server:
+        container_name: minecraft-dev-gangwars
+        ports:
+            - '25566:25565'
+            - '5005:5005'
+        volumes:
+            - ./target:/plugins
+        environment:
+            - EULA=TRUE
+            - VERSION=1.12.2
+            - TYPE=BUKKIT
+            - JVM_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
+        container_name: minecraft-dev
+        image: 'itzg/minecraft-server:latest'
+        stdin_open: true
+        tty: true

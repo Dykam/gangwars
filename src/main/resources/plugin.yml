@@ -1,0 +1,108 @@
+name: ${project.name}
+version: ${project.version}
+description: ${project.description}
+main: nl.dykam.dev.gangwars.GangWarsPlugin
+depend: [WorldGuard]
+commands:
+  gang-join:
+    permission: gangwars.gang.join
+    usage: 'Usage: /gang-join <gang>'
+    description: Accept the invitation to a gang
+  gang-leave:
+    permission: gangwars.gang.leave
+    usage: 'Usage: /gang-leave <gang>'
+    description: Leave your gang
+  gang-invite:
+    permission: gangwars.gang.invite
+    usage: 'Usage: /gang-invite <member>'
+    description: Invite someone to your gang (if you're the owner)
+  gang-invite-cancel:
+    permission: gangwars.gang.invite
+    usage: 'Usage: /gang-invite-cancel <member>'
+    description: Cancel an invitation
+  gang-kick:
+    permission: gangwars.gang.kick
+    usage: 'Usage: /gang-kick <member>'
+    description: Kick someone from your gang (if you're the owner)
+  gang-create:
+    permission: gangwars.gang.create
+    usage: 'Usage: /gang-create <gang>'
+    description: Create a gang and join as owner
+  gang-disband:
+    permission: gangwars.gang.create
+    usage: 'Usage: /gang-disband <gang>'
+    description: Disband your gang (if you're the owner)
+  gang-info:
+    permission: gangwars.gang.info
+    usage: 'Usage: /gang-info <gang>'
+    description: Show info about a gang
+  gang-list:
+    permission: gangwars.gang.list
+    usage: 'Usage: /gang-list'
+    description: Show server gangs
+  gang-admin-join:
+    permission: gangwars.admin
+    usage: 'Usage: /gang-admin-join <gang> <member>'
+    description: Add a member to a gang
+  gang-admin-kick:
+    permission: gangwars.admin
+    usage: 'Usage: /gang-admin-kick <gang> <member>'
+    description: Kick a member from a gang
+  gang-admin-disband:
+    permission: gangwars.admin
+    usage: 'Usage: /gang-admin-disband <gang>'
+    description: Disband a gang
+  gang-admin-create:
+    permission: gangwars.admin
+    usage: 'Usage: /gang-admin-create <gang>'
+    description: Create a gang without members
+  gang-admin-reload:
+    permission: gangwars.admin
+    usage: 'Usage: /gang-admin-reload'
+    description: Reload config
+permissions:
+  gangwars.gang.join:
+    description: Enable joining a gang
+    default: op
+  gangwars.gang.leave:
+    description: Enable joining a gang
+    default: op
+  gangwars.gang.kick:
+    description: Enable kicking people from a gang
+    default: op
+  gangwars.gang.invite:
+    description: Enable inviting people to a gang
+    default: op
+  gangwars.gang.create:
+    description: Enable creating a gang
+    default: op
+  gangwars.gang.disband:
+    description: Enable disbanding a gang
+    default: op
+  gangwars.gang.info:
+    description: Show info about a gang
+    default: op
+  gangwars.gang.list:
+    description: List server gangs
+    default: op
+  gangwars.gang.owner:
+    description: Enable managing a gang
+    default: op
+    children:
+      - gangwars.gang.invite
+      - gangwars.gang.create
+      - gangwars.gang.member
+  gangwars.gang.member:
+    description: Enable joining and leaving a gang
+    default: op
+    children:
+      - gangwars.gang.join
+      - gangwars.gang.leave
+      - gangwars.gang.kick
+      - gangwars.gang.disband
+  gangwars.reload:
+    description: Allows reloading the config
+    default: op
+  gangwars.admin:
+    description: Allows managing other gangs
+    default: op
