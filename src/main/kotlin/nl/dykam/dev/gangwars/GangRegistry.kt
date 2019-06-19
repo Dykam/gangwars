@@ -5,13 +5,27 @@ import arrow.core.Option
 import arrow.core.Some
 import org.bukkit.configuration.InvalidConfigurationException
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.plugin.Plugin
 
 import java.io.File
 import java.io.IOException
 import java.util.*
 
-data class Gang(val name: String, val members: List<UUID>)
+data class Gang(val name: String, val members: List<UUID>, val powerLevel: Float)
+data class StorageGang(val members: List<String>, val powerLevel: Float) : ConfigurationSerializable {
+    override fun serialize(): MutableMap<String, Any> = mutableMapOf(
+        "members" to members,
+        "powerLevel" to powerLevel
+    )
+    companion object {
+        @JvmStatic
+        fun deserialize(data: Map<String, Object>): StorageGang = StorageGang(
+            data["members"] as List<String>,
+            data["powerLevel"] as Float
+        )
+    }
+}
 
 sealed class AddResult {
     object GangDoesNotExist: AddResult()
@@ -24,11 +38,15 @@ sealed class RemoveResult {
     data class Success(val gang: Gang): RemoveResult()
 }
 
-class GangRegistry(private val plugin: Plugin, private val autoSave: Boolean) : Iterable<Gang> {
+class GangRegistry(plugin: Plugin, private val autoSave: Boolean) : Iterable<Gang> {
     private val customConfig: YamlConfiguration
-    private val gangs: MutableMap<String, List<UUID>> = HashMap()
+    private val gangs: MutableMap<String, Gang> = HashMap()
 
     private val memberToGang = HashMap<UUID, String>()
+
+    private val newGangs: AutoDeriveSet<Gang> = AutoDeriveSet()
+    private val newMembers = newGangs.add(createMultiKeyDerivative<UUID, Gang> { gang -> gang.members })
+    private val newGangName = newGangs.add(createKeyDerivative<String, Gang> { gang -> gang.name })
 
     private val customConfigFile: File
 
@@ -45,13 +63,17 @@ class GangRegistry(private val plugin: Plugin, private val autoSave: Boolean) : 
 
     fun load() {
         try {
+            newGangs.clear()
             gangs.clear()
             memberToGang.clear()
             customConfig.load(customConfigFile)
             customConfig.getKeys(false).forEach { gangName ->
-                val members = customConfig.getStringList(gangName).map(UUID::fromString)
-                gangs[gangName] = members
-                members.forEach { member -> memberToGang[member] = gangName }
+                val storageGang = customConfig.getSerializable(gangName, StorageGang::class.java)
+                val gang = Gang(gangName, storageGang.members.map(UUID::fromString), storageGang.powerLevel)
+
+                gangs[gangName] = gang
+                gang.members.forEach { member -> memberToGang[member] = gangName }
+                newGangs += gang
             }
         } catch (e: IOException) {
             e.printStackTrace()
@@ -65,20 +87,24 @@ class GangRegistry(private val plugin: Plugin, private val autoSave: Boolean) : 
             customConfig[gangName] = null
         }
 
-        gangs.forEach { (gangName, members) ->
-            customConfig.set(gangName, members.map { it.toString() })
+        gangs.forEach { (_, gang) ->
+            var storageGang = StorageGang(
+                gang.members.map { it.toString() },
+                gang.powerLevel
+            )
+            customConfig.set(gang.name, storageGang.serialize())
         }
         customConfig.save(customConfigFile)
     }
 
-    fun saveIfAutoSave() { if (autoSave) { save(); }}
+    private fun saveIfAutoSave() { if (autoSave) { save(); }}
 
     override fun iterator(): Iterator<Gang> {
-        return gangs.asSequence().map { (key, value) -> Gang(key, value) }.iterator()
+        return gangs.values.iterator()
     }
 
     operator fun get(gang: String): Gang? {
-        return gangs[gang]?.let { members -> Gang(gang, members) }
+        return gangs[gang]
     }
 
     fun getForPlayer(member: UUID): Gang? {
@@ -87,16 +113,19 @@ class GangRegistry(private val plugin: Plugin, private val autoSave: Boolean) : 
 
     fun addMember(gangName: String, member: UUID): AddResult {
         memberToGang[member]?.let {
-            return@addMember AddResult.MemberAlreadyInGang(Gang(it, gangs[it]!!))
+            return@addMember AddResult.MemberAlreadyInGang(gangs[it]!!)
         }
 
         return when (val gang = this[gangName]) {
             null -> AddResult.GangDoesNotExist
             else -> {
-                gangs[gangName] = gang.members + member
+                val updatedGang = gang.copy(members = gang.members + member)
+                newGangs -= gang
+                newGangs += updatedGang
+                gangs[gangName] = updatedGang
                 memberToGang[member] = gangName
                 saveIfAutoSave()
-                AddResult.Success(Gang(gangName, gangs[gangName]!!))
+                AddResult.Success(updatedGang)
             }
         }
     }
@@ -105,11 +134,14 @@ class GangRegistry(private val plugin: Plugin, private val autoSave: Boolean) : 
         return when (val gangName = memberToGang[member]) {
             null -> RemoveResult.MemberNotInGang
             else -> {
-                val gangMembers = gangs[gangName]!!
-                gangs[gangName] = gangMembers - member
+                val gang = gangs[gangName]!!
+                val updatedGang = gang.copy(members = gang.members - member)
+                newGangs -= gang
+                newGangs += updatedGang
+                gangs[gangName] = updatedGang
                 memberToGang -= member
                 saveIfAutoSave()
-                RemoveResult.Success(Gang(gangName, gangs[gangName]!!))
+                RemoveResult.Success(updatedGang)
             }
         }
     }
@@ -119,28 +151,20 @@ class GangRegistry(private val plugin: Plugin, private val autoSave: Boolean) : 
             return None
         }
         val memberList = listOf<UUID>()
-        val gang = Gang(gangName, memberList)
-        gangs += Pair(gangName, memberList)
+        val gang = Gang(gangName, memberList, 50f)
+        newGangs += gang
+        gangs += Pair(gangName, gang)
         saveIfAutoSave()
         return Some(gang)
     }
 
     fun removeGang(gangName: String): Gang? {
-        val result = gangs.remove(gangName)
+        val gang = gangs.remove(gangName)
+        gang?.let { newGangs -= it }
+        gang?.members?.forEach { memberToGang -= it }
         saveIfAutoSave()
-        return result?.let { Gang(gangName, it) }
+        return gang
     }
-
-//    fun put(gang: Gang) {
-//        when (val existing = this[gang.name]) {
-//            is Some -> existing.t.members
-//                    .filter { member -> !gang.members.contains(member) }
-//                    .forEach { member -> memberToGang.remove(member) }
-//        }
-//
-//        gang.members.forEach { member -> memberToGang[member] = gang.name }
-//        gangs[gang.name] = gang.members
-//    }
 
     companion object {
         const val GANGS_YML = "gangs.yml"

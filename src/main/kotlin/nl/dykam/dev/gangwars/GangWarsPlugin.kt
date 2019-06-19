@@ -9,6 +9,8 @@ import com.sk89q.worldguard.protection.flags.StateFlag
 import com.sk89q.worldguard.protection.flags.registry.FlagConflictException
 import org.bukkit.Bukkit
 import org.bukkit.ChatColor
+import org.bukkit.OfflinePlayer
+import org.bukkit.Server
 import org.bukkit.command.Command
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
@@ -50,6 +52,10 @@ class GangWarsPlugin : JavaPlugin(), Listener {
 
     override fun onLoad() {
         super.onLoad()
+
+        val coll = AutoDeriveSet<String>()
+        val sub = coll.add(createKeyDerivative<String, String> { k -> k.reversed() })
+
 
         worldGuard = WorldGuardPlugin.inst()
         val flagRegistry = worldGuard.flagRegistry
@@ -121,31 +127,24 @@ class GangWarsPlugin : JavaPlugin(), Listener {
                     return@Command1
                 }
 
-                val uuid = memberName.let {
-                    try {
-                        UUID.fromString(it)
-                    } catch (ex: IllegalArgumentException) {
-                        val member = server.getPlayerExact(memberName)
-                        if (member == null) {
-                            player.sendMessage(format.fail("Player ${memberName.stripColor()} doesn't exist"))
-                            return@Command1
-                        }
-                        member.uniqueId
-                    }
-                }
-
-                val existingGang = registry.getForPlayer(uuid)
-                if (existingGang != null) {
-                    player.sendMessage(format.fail("Player ${memberName.stripColor()} is already in ${existingGang.name}"))
+                val member = server.getPlayerByNameOrUuid(memberName)
+                if (member == null) {
+                    player.sendMessage(format.fail("Player ${memberName.stripColor()} doesn't exist"))
                     return@Command1
                 }
 
-                val pair = Pair(gang.name, uuid)
+                val existingGang = registry.getForPlayer(member.uniqueId)
+                if (existingGang != null) {
+                    player.sendMessage(format.fail("Player ${member.getPlayerName().stripColor()} is already in ${existingGang.name}"))
+                    return@Command1
+                }
+
+                val pair = Pair(gang.name, member.uniqueId)
                 if (pair in openInvites) {
-                    player.sendMessage(format.fail("Player ${memberName.stripColor()} was already invited, extending invitation"))
+                    player.sendMessage(format.fail("Player ${member.getPlayerName().stripColor()} was already invited, extending invitation"))
                 } else {
-                    player.sendMessage(format.success("Player ${memberName.stripColor()} has been invited"))
-                    server.getPlayer(uuid).sendMessage(format.success("You have been invited to ${gang.name} by ${player.displayName.stripColor()}"))
+                    player.sendMessage(format.success("Player ${member.getPlayerName().stripColor()} has been invited"))
+                    if (member is Player) { member.sendMessage(format.success("You have been invited to ${gang.name} by ${player.displayName.stripColor()}")) }
                 }
 
                 var task: BukkitTask? = null
@@ -154,7 +153,7 @@ class GangWarsPlugin : JavaPlugin(), Listener {
                         return@runTaskLater
                     }
                     openInvites.remove(pair)
-                    player.sendMessage("${ChatColor.COLOR_CHAR}Invite for player ${memberName.stripColor()} expired")
+                    player.sendMessage("${ChatColor.COLOR_CHAR}Invite for player ${member.getPlayerName().stripColor()} expired")
                 }, INVITATION_DURATION)
                 openInvites[pair] = task!!
 
@@ -171,28 +170,20 @@ class GangWarsPlugin : JavaPlugin(), Listener {
                     return@Command1
                 }
 
-                val uuid = memberName.let {
-                    try {
-                        UUID.fromString(it)
-                    } catch (ex: IllegalArgumentException) {
-                        val member = server.getPlayerExact(memberName)
-                        if (member == null) {
-                            player.sendMessage(format.fail("Player ${memberName.stripColor()} doesn't exist"))
-                            return@Command1
-                        }
-                        member.uniqueId
-                    }
-                }
-
-                val clearTask = openInvites.remove(Pair(gang.name, uuid))
-                if (clearTask == null) {
-                    player.sendMessage(format.fail("Player ${memberName.stripColor()} wasn't invited"))
+                val member = server.getPlayerByNameOrUuid(memberName)
+                if (member == null) {
+                    player.sendMessage(format.fail("Player ${memberName.stripColor()} doesn't exist"))
                     return@Command1
                 }
 
-                openInvites.remove(Pair(gang.name, uuid))
+                val clearTask = openInvites.remove(Pair(gang.name, member.uniqueId))
+                if (clearTask == null) {
+                    player.sendMessage(format.fail("Player ${member.getPlayerName().stripColor()} wasn't invited"))
+                    return@Command1
+                }
+
                 player.sendMessage(format.success("Player ${memberName.stripColor()}'s invite has been cancelled"))
-                server.getPlayer(uuid).sendMessage(format.success("Your invite for ${gang.name} has been cancelled by ${player.displayName.stripColor()}"))
+                if (member is Player) member.sendMessage(format.success("Your invite for ${gang.name} has been cancelled by ${player.displayName.stripColor()}"))
             },
             "gang-kick" to CommandBase.Command1 { player, memberName ->
                 val gang = registry.getForPlayer(player.uniqueId)
@@ -206,32 +197,25 @@ class GangWarsPlugin : JavaPlugin(), Listener {
                     return@Command1
                 }
 
-                val uuid = memberName.let {
-                    try {
-                        UUID.fromString(it)
-                    } catch (ex: IllegalArgumentException) {
-                        val member = server.getPlayerExact(memberName)
-                        if (member == null) {
-                            player.sendMessage(format.fail("Player ${memberName.stripColor()} doesn't exist"))
-                            return@Command1
-                        }
-                        member.uniqueId
-                    }
+                val member = server.getPlayerByNameOrUuid(memberName)
+                if (member == null) {
+                    player.sendMessage(format.fail("Player ${memberName.stripColor()} doesn't exist"))
+                    return@Command1
                 }
 
-                if (player.uniqueId == uuid) {
+                if (player.uniqueId == member.uniqueId) {
                     player.sendMessage(format.fail("You can't kick yourself"))
                     return@Command1
                 }
 
-                when(registry.removeMember(uuid)) {
+                when(registry.removeMember(member.uniqueId)) {
                     is RemoveResult.MemberNotInGang -> {
-                        player.sendMessage(format.fail("Player ${memberName.stripColor()} is not in the gang"))
+                        player.sendMessage(format.fail("Player ${member.getPlayerName().stripColor()} is not in the gang"))
                         return@Command1
                     }
                 }
 
-                registry[gang.name]?.broadcast(format.success("Player ${memberName.stripColor()} has been kicked from the gang"))
+                registry[gang.name]?.broadcast(format.success("Player ${member.getPlayerName().stripColor()} has been kicked from the gang"))
             },
             "gang-create" to CommandBase.Command1 { player, gangName ->
                 val existingGang = registry.getForPlayer(player.uniqueId)
@@ -328,19 +312,12 @@ class GangWarsPlugin : JavaPlugin(), Listener {
                     return@Command2
                 }
 
-                val uuid = memberName.let {
-                    try {
-                        UUID.fromString(it)
-                    } catch (ex: Exception) {
-                        val member = server.getPlayerExact(memberName)
-                        if (member == null) {
-                            sender.sendMessage(format.fail("Player ${memberName.stripColor()} doesn't exist"))
-                            return@Command2
-                        }
-                        member.uniqueId
-                    }
+                val member = server.getPlayerByNameOrUuid(memberName)
+                if (member == null) {
+                    sender.sendMessage(format.fail("Player ${memberName.stripColor()} doesn't exist"))
+                    return@Command2
                 }
-                registry.removeMember(uuid)
+                registry.removeMember(member.uniqueId)
             },
             "gang-admin-disband" to CommandBase.Command1 { sender, gangName ->
                 val gang = registry.removeGang(gangName)
@@ -431,10 +408,13 @@ class GangWarsPlugin : JavaPlugin(), Listener {
     }
 
     companion object {
-
         val GANG_WARS = StateFlag("gangwars", false)
         val INVITATION_DURATION = 20L * 60
     }
+}
+
+fun Server.getPlayerByNameOrUuid(nameOrUuid: String): OfflinePlayer? {
+    return this.getPlayer(nameOrUuid) ?: try { this.getPlayer(UUID.fromString(nameOrUuid)) } catch (ex: IllegalArgumentException) { null }
 }
 
 fun String.stripColor(): String {
@@ -455,7 +435,10 @@ fun Gang.broadcast(message: String) {
     }
 }
 fun getPlayerName(uuid: UUID): String {
-    return Bukkit.getServer().getPlayer(uuid)?.displayName ?: Bukkit.getServer().getOfflinePlayer(uuid).name
+    return (Bukkit.getServer().getPlayer(uuid) ?: Bukkit.getServer().getOfflinePlayer(uuid)).getPlayerName()
+}
+fun OfflinePlayer.getPlayerName(): String {
+    return if (this is Player) { this.displayName } else { this.name }
 }
 
 object format {
