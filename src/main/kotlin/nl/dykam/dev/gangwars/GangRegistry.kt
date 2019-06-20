@@ -31,22 +31,23 @@ sealed class AddResult {
     object GangDoesNotExist: AddResult()
     data class MemberAlreadyInGang(val gang: Gang): AddResult()
     data class Success(val gang: Gang): AddResult()
+    object Unknown: AddResult()
 }
 
 sealed class RemoveResult {
     object MemberNotInGang: RemoveResult()
     data class Success(val gang: Gang): RemoveResult()
+    object Unknown: RemoveResult()
 }
 
 class GangRegistry(plugin: Plugin, private val autoSave: Boolean) : Iterable<Gang> {
     private val customConfig: YamlConfiguration
-    private val gangs: MutableMap<String, Gang> = HashMap()
 
-    private val memberToGang = HashMap<UUID, String>()
+    private val set: AutoDerive<Gang> = AutoDerive()
+    private val gangs = set.add(createSetDerivative())
 
-    private val newGangs: AutoDeriveSet<Gang> = AutoDeriveSet()
-    private val newMembers = newGangs.add(createMultiKeyDerivative<UUID, Gang> { gang -> gang.members })
-    private val newGangName = newGangs.add(createKeyDerivative<String, Gang> { gang -> gang.name })
+    private val byMember = set.add(createMultiKeyDerivative<UUID, Gang> { gang -> gang.members })
+    private val byName = set.add(createKeyDerivative<String, Gang> { gang -> gang.name })
 
     private val customConfigFile: File
 
@@ -58,22 +59,16 @@ class GangRegistry(plugin: Plugin, private val autoSave: Boolean) : Iterable<Gan
         }
 
         customConfig = YamlConfiguration()
-        load()
     }
 
     fun load() {
         try {
-            newGangs.clear()
-            gangs.clear()
-            memberToGang.clear()
+            set.clear()
             customConfig.load(customConfigFile)
             customConfig.getKeys(false).forEach { gangName ->
                 val storageGang = customConfig.getSerializable(gangName, StorageGang::class.java)
                 val gang = Gang(gangName, storageGang.members.map(UUID::fromString), storageGang.powerLevel)
-
-                gangs[gangName] = gang
-                gang.members.forEach { member -> memberToGang[member] = gangName }
-                newGangs += gang
+                set += gang
             }
         } catch (e: IOException) {
             e.printStackTrace()
@@ -87,12 +82,11 @@ class GangRegistry(plugin: Plugin, private val autoSave: Boolean) : Iterable<Gan
             customConfig[gangName] = null
         }
 
-        gangs.forEach { (_, gang) ->
-            var storageGang = StorageGang(
+        gangs.forEach { gang ->
+            customConfig.set(gang.name, StorageGang(
                 gang.members.map { it.toString() },
                 gang.powerLevel
-            )
-            customConfig.set(gang.name, storageGang.serialize())
+            ))
         }
         customConfig.save(customConfigFile)
     }
@@ -100,68 +94,61 @@ class GangRegistry(plugin: Plugin, private val autoSave: Boolean) : Iterable<Gan
     private fun saveIfAutoSave() { if (autoSave) { save(); }}
 
     override fun iterator(): Iterator<Gang> {
-        return gangs.values.iterator()
+        return gangs.iterator()
     }
 
     operator fun get(gang: String): Gang? {
-        return gangs[gang]
+        return byName[gang]
     }
 
     fun getForPlayer(member: UUID): Gang? {
-        return memberToGang[member]?.let { gangName -> this[gangName] }
+        return byMember[member]
     }
 
     fun addMember(gangName: String, member: UUID): AddResult {
-        memberToGang[member]?.let {
-            return@addMember AddResult.MemberAlreadyInGang(gangs[it]!!)
+        byMember[member]?.let {
+            return@addMember AddResult.MemberAlreadyInGang(it)
+        }
+        if (byName[gangName] == null) {
+            return AddResult.GangDoesNotExist
         }
 
-        return when (val gang = this[gangName]) {
-            null -> AddResult.GangDoesNotExist
-            else -> {
-                val updatedGang = gang.copy(members = gang.members + member)
-                newGangs -= gang
-                newGangs += updatedGang
-                gangs[gangName] = updatedGang
-                memberToGang[member] = gangName
-                saveIfAutoSave()
-                AddResult.Success(updatedGang)
-            }
+        val updatedGang = byName.update(gangName) { it.copy(members = it.members + member) }
+        return if (updatedGang != null) {
+            saveIfAutoSave()
+            AddResult.Success(updatedGang)
+        } else {
+            AddResult.Unknown
         }
     }
 
     fun removeMember(member: UUID): RemoveResult {
-        return when (val gangName = memberToGang[member]) {
-            null -> RemoveResult.MemberNotInGang
-            else -> {
-                val gang = gangs[gangName]!!
-                val updatedGang = gang.copy(members = gang.members - member)
-                newGangs -= gang
-                newGangs += updatedGang
-                gangs[gangName] = updatedGang
-                memberToGang -= member
-                saveIfAutoSave()
-                RemoveResult.Success(updatedGang)
-            }
+        if (byMember[member] == null) {
+            return RemoveResult.MemberNotInGang
+        }
+        val updatedGang = byMember.update(member) { it.copy(members = it.members - member) }
+        return if (updatedGang != null) {
+            saveIfAutoSave()
+            RemoveResult.Success(updatedGang)
+        } else {
+            RemoveResult.Unknown
         }
     }
 
     fun createGang(gangName: String): Option<Gang> {
-        if (gangs.containsKey(gangName)) {
+        if (byName.containsKey(gangName)) {
             return None
         }
         val memberList = listOf<UUID>()
         val gang = Gang(gangName, memberList, 50f)
-        newGangs += gang
-        gangs += Pair(gangName, gang)
+        set += gang
         saveIfAutoSave()
         return Some(gang)
     }
 
     fun removeGang(gangName: String): Gang? {
-        val gang = gangs.remove(gangName)
-        gang?.let { newGangs -= it }
-        gang?.members?.forEach { memberToGang -= it }
+        val gang = byName[gangName]
+        gang?.let { set -= it }
         saveIfAutoSave()
         return gang
     }

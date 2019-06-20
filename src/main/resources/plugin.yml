@@ -36,6 +36,10 @@ commands:
     permission: gangwars.gang.info
     usage: 'Usage: /gang-info <gang>'
     description: Show info about a gang
+  gang-who:
+    permission: gangwars.gang.info
+    usage: 'Usage: /gang-who <player>'
+    description: Show what gang someone is in
   gang-list:
     permission: gangwars.gang.list
     usage: 'Usage: /gang-list'
