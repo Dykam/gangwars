@@ -1,0 +1,50 @@
+power-levels:
+  gain-on-kill:
+    _explanation: |
+      When a player kills someone else, his gang gains a certain amount of power, based on the power level of the enemy
+      gang. First, the player gets a constant amount, to which then is added a fraction of the enemy's gang. This is
+      then also subtracted from the enemy's gang.
+
+      E.g. for a constant of 10 and a fraction of 0.01:
+      | killer before | killed before | amount                 | killer after | killed after |
+      |---------------|---------------|------------------------|--------------|--------------|
+      |           100 |           100 | 10 +   100 * 0.01 = 11 |          111 |           89 |
+      |           100 |             0 | 10 +     0 * 0.01 = 10 |          110 |          -10 |
+      |           100 |         -1000 | 10 + -1000 * 0.01 =  0 |          100 |        -1000 |
+
+      So the minimum power level is `-constant / fraction-of-enemy`, in this case `-10 / 0.01 = -1000`
+    constant: 10
+    fraction-of-enemy: 0.01
+  loss:
+    _explanation: |
+       Over time, power levels are returned back to 0, to keep people playing and help gangs with negative scores to
+       get back to 0. While the power levels are changed at the start of every war time, to make it easier you can
+       choose if the amount you set is per week, or day etc, and then the actual amounts are calculated off that.
+       bonus-for-negative is a multiplier applied for those gangs with a power level less than 0
+       Values for each: real-hour, real-day, real-week, in-game-day, in-game-hour
+    constant: 100
+    fraction: 0.5
+    each: real-week
+    bonus-for-negative: 2
+
+peace-and-war:
+  war-time:
+    _explanation: |
+      When to start and stop the war time. Use a Minecraft time (e.g 10:00), ticks (12000) or name (sunset)
+      | name     | time  | ticks |
+      |----------|-------|-------|
+      | day      | 07:00 |  1000 |
+      | noon     | 12:00 |  6000 |
+      | sunset   | 18:00 | 12000 |
+      | night    | 19:00 | 13000 |
+      | midnight | 00:00 | 18000 |
+      | sunrise  | 05:00 | 23000 |
+    start: sunset
+    end: sunset
+    disable-leave-join-gang: true
+
+income:
+  _explanation: |
+     Simply the amount per block a gang gets per block broken, when they 'own' a farm etc
+  minecraft:wheat: 5
+  minecraft:cactus: 5

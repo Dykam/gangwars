@@ -6,6 +6,7 @@ import com.sk89q.worldguard.bukkit.WorldGuardPlugin
 import com.sk89q.worldguard.protection.events.DisallowedPVPEvent
 import com.sk89q.worldguard.protection.flags.DefaultFlag
 import com.sk89q.worldguard.protection.flags.StateFlag
+import com.sk89q.worldguard.protection.flags.StringFlag
 import com.sk89q.worldguard.protection.flags.registry.FlagConflictException
 import org.bukkit.Bukkit
 import org.bukkit.ChatColor
@@ -13,6 +14,8 @@ import org.bukkit.OfflinePlayer
 import org.bukkit.Server
 import org.bukkit.command.Command
 import org.bukkit.command.CommandSender
+import org.bukkit.configuration.serialization.ConfigurationSerializable
+import org.bukkit.configuration.serialization.ConfigurationSerialization
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -47,6 +50,7 @@ sealed class CommandBase<T : CommandSender>(val count: Int) {
 }
 
 class GangWarsPlugin : JavaPlugin(), Listener {
+    private lateinit var configuration: Config
     private lateinit var worldGuard: WorldGuardPlugin
 
     override fun onLoad() {
@@ -68,6 +72,9 @@ class GangWarsPlugin : JavaPlugin(), Listener {
 
     override fun onEnable() {
         super.onEnable()
+
+        listOf(StorageGang::class.java, Config::class.java, Config.PowerLevels::class.java).forEach(ConfigurationSerialization::registerClass)
+
         config.options().copyDefaults(true)
 
         Bukkit.getPluginManager().registerEvents(this, this)
@@ -141,11 +148,12 @@ class GangWarsPlugin : JavaPlugin(), Listener {
     override fun onDisable() {}
 
     private fun parseConfig() {
-        val config = config
+        this.configuration = Config.deserialize(config.toMap())
     }
 
     companion object {
         val GANG_WARS = StateFlag("gangwars", false)
+        val GANG_ZONE = StringFlag("gangzone")
         val INVITATION_DURATION = 20L * 60
     }
 }

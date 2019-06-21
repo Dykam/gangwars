@@ -20,9 +20,9 @@ data class StorageGang(val members: List<String>, val powerLevel: Float) : Confi
     )
     companion object {
         @JvmStatic
-        fun deserialize(data: Map<String, Object>): StorageGang = StorageGang(
+        fun deserialize(data: Map<String, Any>): StorageGang = StorageGang(
             data["members"] as List<String>,
-            data["powerLevel"] as Float
+            (data["powerLevel"] as Double).toFloat()
         )
     }
 }
@@ -140,7 +140,7 @@ class GangRegistry(plugin: Plugin, private val autoSave: Boolean) : Iterable<Gan
             return None
         }
         val memberList = listOf<UUID>()
-        val gang = Gang(gangName, memberList, 50f)
+        val gang = Gang(gangName, memberList, 0f)
         set += gang
         saveIfAutoSave()
         return Some(gang)
