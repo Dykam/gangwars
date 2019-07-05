@@ -3,14 +3,20 @@ package nl.dykam.dev.gangwars
 import arrow.core.None
 import arrow.core.Option
 import arrow.core.Some
+import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.configuration.InvalidConfigurationException
+import org.bukkit.configuration.MemoryConfiguration
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.plugin.Plugin
-
 import java.io.File
 import java.io.IOException
+import java.lang.IllegalArgumentException
 import java.util.*
+import kotlin.reflect.KClass
+import kotlin.reflect.KProperty
+import kotlin.reflect.KType
+import kotlin.reflect.full.primaryConstructor
 
 data class Gang(val name: String, val members: List<UUID>, val powerLevel: Float)
 data class StorageGang(val members: List<String>, val powerLevel: Float) : ConfigurationSerializable {
@@ -19,7 +25,6 @@ data class StorageGang(val members: List<String>, val powerLevel: Float) : Confi
         "powerLevel" to powerLevel
     )
     companion object {
-        @JvmStatic
         fun deserialize(data: Map<String, Any>): StorageGang = StorageGang(
             data["members"] as List<String>,
             (data["powerLevel"] as Double).toFloat()
@@ -66,7 +71,7 @@ class GangRegistry(plugin: Plugin, private val autoSave: Boolean) : Iterable<Gan
             set.clear()
             customConfig.load(customConfigFile)
             customConfig.getKeys(false).forEach { gangName ->
-                val storageGang = customConfig.getSerializable(gangName, StorageGang::class.java)
+                val storageGang = StorageGang.deserialize(customConfig.getConfigurationSection(gangName).toMap())
                 val gang = Gang(gangName, storageGang.members.map(UUID::fromString), storageGang.powerLevel)
                 set += gang
             }
@@ -83,7 +88,7 @@ class GangRegistry(plugin: Plugin, private val autoSave: Boolean) : Iterable<Gan
         }
 
         gangs.forEach { gang ->
-            customConfig.set(gang.name, StorageGang(
+            customConfig.serialize(gang.name, StorageGang(
                 gang.members.map { it.toString() },
                 gang.powerLevel
             ))
@@ -155,5 +160,47 @@ class GangRegistry(plugin: Plugin, private val autoSave: Boolean) : Iterable<Gan
 
     companion object {
         const val GANGS_YML = "gangs.yml"
+    }
+}
+
+inline fun <reified T : Any> deserializeInstance(config: Any): T {
+    return deserializeInstance2(config, T::class)
+}
+
+fun <T : Any> deserializeInstance2(config: Any, clazz: KType<T>): T {
+    when (clazz) {
+        clazz
+    }
+}
+
+fun serializeInstance(instance: Any?): Any? {
+    return when {
+        instance == null -> null
+        instance is List<*> -> instance.map(::serializeInstance)
+        instance is Map<*, *> -> instance
+        instance::class.isData ->
+            instance::class.members.filter { it is KProperty }.map { it as KProperty }.associate {
+                Pair(it.name, serializeInstance(it.getter.call(instance)))
+            }
+        else -> instance
+    }
+}
+
+fun ConfigurationSection.serialize(instance: Any) {
+    serializeInstance(instance)?.let {
+        when(it) {
+            is Map<*, *> ->
+                it.forEach { (key, value) ->
+                    this.set(key?.toString(), value)
+                }
+            else ->
+                throw IllegalArgumentException("Can only serialize maps or data classes to configuration sections")
+        }
+    }
+}
+
+fun ConfigurationSection.serialize(path: String, instance: Any) {
+    serializeInstance(instance)?.let {
+        this.set(path, it)
     }
 }

@@ -14,6 +14,7 @@ import org.bukkit.OfflinePlayer
 import org.bukkit.Server
 import org.bukkit.command.Command
 import org.bukkit.command.CommandSender
+import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.configuration.serialization.ConfigurationSerialization
 import org.bukkit.entity.Player
@@ -21,6 +22,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scheduler.BukkitTask
+import java.io.StringReader
 import java.util.*
 
 sealed class CommandBase<T : CommandSender>(val count: Int) {
@@ -72,8 +74,6 @@ class GangWarsPlugin : JavaPlugin(), Listener {
 
     override fun onEnable() {
         super.onEnable()
-
-        listOf(StorageGang::class.java, Config::class.java, Config.PowerLevels::class.java).forEach(ConfigurationSerialization::registerClass)
 
         config.options().copyDefaults(true)
 

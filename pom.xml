@@ -40,6 +40,12 @@
             <artifactId>arrow-core</artifactId>
             <version>${arrow.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-reflect</artifactId>
+            <version>${kotlin.version}</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 
     <scm>

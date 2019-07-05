@@ -1,14 +1,9 @@
 package nl.dykam.dev.gangwars
 
 import org.bukkit.configuration.ConfigurationSection
-import org.bukkit.configuration.serialization.ConfigurationSerializable
 
-data class Config(val powerLevels: PowerLevels, val peaceAndWar: PeaceAndWar, val income: Income) : ConfigurationSerializable {
-    override fun serialize(): MutableMap<String, Any> {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
-
-    data class PowerLevels(val gainOnKill: GainOnKill, val loss: Loss) : ConfigurationSerializable {
+data class Config(val powerLevels: PowerLevels, val peaceAndWar: PeaceAndWar, val income: Income) {
+    data class PowerLevels(val gainOnKill: GainOnKill, val loss: Loss) {
         data class GainOnKill(val constant: Float, val fractionOfEnemy: Float) {
             companion object {
                 @JvmStatic
@@ -44,14 +39,11 @@ data class Config(val powerLevels: PowerLevels, val peaceAndWar: PeaceAndWar, va
             }
         }
 
-        override fun serialize(): MutableMap<String, Any> {
-            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-        }
         companion object {
             @JvmStatic
             fun deserialize(config: Map<String, Any>): PowerLevels = PowerLevels(
-                    GainOnKill.deserialize(config["gain-on-kill"] as Map<String, Any>),
-                    Loss.deserialize(config["loss"] as Map<String, Any>)
+                    GainOnKill.deserialize(config["gain-on-kill"] as? Map<String, Any> ?: mapOf()),
+                    Loss.deserialize(config["loss"] as? Map<String, Any> ?: mapOf())
             )
 
         }
@@ -110,7 +102,7 @@ data class Config(val powerLevels: PowerLevels, val peaceAndWar: PeaceAndWar, va
         companion object {
             @JvmStatic
             fun deserialize(config: Map<String, Any>): PeaceAndWar = PeaceAndWar(
-                    WarTime.deserialize(config["war-time"] as Map<String, Any>)
+                    WarTime.deserialize(config["war-time"] as? Map<String, Any> ?: mapOf())
             )
         }
     }
@@ -127,9 +119,9 @@ data class Config(val powerLevels: PowerLevels, val peaceAndWar: PeaceAndWar, va
     companion object {
         @JvmStatic
         fun deserialize(config: Map<String, Any>): Config = Config(
-                PowerLevels.deserialize(config["power-levels"] as Map<String, Any>),
-                PeaceAndWar.deserialize(config["peace-and-war"] as Map<String, Any>),
-                Income.deserialize(config["income"] as Map<String, Any>)
+                PowerLevels.deserialize(config["power-levels"] as? Map<String, Any> ?: mapOf()),
+                PeaceAndWar.deserialize(config["peace-and-war"] as? Map<String, Any> ?: mapOf()),
+                Income.deserialize(config["income"] as? Map<String, Any> ?: mapOf())
         )
     }
 }
